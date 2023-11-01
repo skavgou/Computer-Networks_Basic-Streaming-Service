@@ -48,20 +48,25 @@ def addToOldSubscription(header, client):
             data = fileHeader + str.encode(msg)
             UDPBrokerSocket.sendto(data, client[0])
             return
-    client[1].append(header[2:6])
-    msg = "You are have successfully been subscribed"
-    fileHeader = idByte + ackByte + messageBlank
-    data = fileHeader + str.encode(msg)
-    UDPBrokerSocket.sendto(data, client[0])
+    addSubscription(header,client)
 
 
 def addSubscription(header, client):
-    client[1].append(header[2:6])
-    print("Client subscribed")
-    msg = "You have successfully been subscribed"
+    for i in servers:
+        if i[0] == header[2:5]:
+            for j in i[1]:
+                if header[2:6] == j[0]:
+                    client[1].append(header[2:6])
+                    msg = "You have successfully been subscribed"
+                    fileHeader = idByte + ackByte + messageBlank
+                    data = fileHeader + str.encode(msg)
+                    UDPBrokerSocket.sendto(data, client[0])
+                    return
+    msg = "Stream does not exist"
     fileHeader = idByte + ackByte + messageBlank
     data = fileHeader + str.encode(msg)
     UDPBrokerSocket.sendto(data, client[0])
+
 
 def subscribeClient(header, data, port):
     oldClient = False
@@ -89,7 +94,7 @@ def sendServerList(header,data,port):
         msg += "Streams: Note some streams may not be currently running\n"
         for i in servers:
             for j in i[1]:
-                msg += j[0].hex() + " - " + j[1] + "\n"
+               msg += j[0].hex() + " - " + j[1] + "\n"
         if msg == "Streams: Note some streams may not be currently running\n":
             msg = "We have no active streams right now :("
 
@@ -105,10 +110,7 @@ def sendServerList(header,data,port):
 
 def streamToString(stream):
     msg = ""
-    for i in stream:
-        binaryRep = bin(i)
-        binaryRep = binaryRep[2:].zfill(8)
-        msg += binaryRep
+    msg += stream.hex()
     return msg
 
 def unsubServer(header, port):
@@ -117,7 +119,7 @@ def unsubServer(header, port):
             if header[2:6] in i[1]:
                 i[1].remove(header[2:6])
                 msg = "You have successfully been unsubscribed"
-                fileHeader = idByte + messageByte + messageBlank
+                fileHeader = idByte + ackByte + messageBlank
                 data = fileHeader + str.encode(msg)
                 UDPBrokerSocket.sendto(data, i[0])
 
@@ -125,7 +127,7 @@ def disconnectClient(header,port):
     for i in clients:
         if i[0] == port:
             msg = "You have successfully been disconnected"
-            fileHeader = idByte + messageByte + messageBlank
+            fileHeader = idByte + ackByte + messageBlank
             data = fileHeader + str.encode(msg)
             UDPBrokerSocket.sendto(data, i[0])
             clients.remove(i)

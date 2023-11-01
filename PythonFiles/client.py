@@ -40,24 +40,29 @@ def send(type):
     while not complete:
 
         if type[:3] == 'msg':
-            data = str.encode(msgFromClient)
+            data = str.encode("Sending request for stream list")
             bytesToSend = idByte + msgByte + blankStream + data
             print("Sending request for stream list")
             UDPClientSocket.sendto(bytesToSend, brokerAddressPort)
         elif type[:3] == 'req':
             streamID = type[4:len(type)]
+            data = str.encode("Connect request for " + streamID)
             streamID = bytes.fromhex(streamID)
-            data = str.encode("Connect request")
             bytesToSend = idByte + reqByte + streamID + data
             UDPClientSocket.sendto(bytesToSend, brokerAddressPort)
-            stream = []
-            stream.append(streamID)
-            stream.append(-1)
-            myStreams.append(stream)
+            check = False
+            for i in myStreams:
+                if i[0] == streamID:
+                    check = True
+            if not check:
+                stream = []
+                stream.append(streamID)
+                stream.append(-1)
+                myStreams.append(stream)
         elif type[:3] == 'uns':
             streamID = type[4:len(type)]
+            data = str.encode("Unsubscribe request for" + streamID)
             streamID = bytes.fromhex(streamID)
-            data = str.encode("Unsubscribe request")
             bytesToSend = idByte + unsByte + streamID + data
             UDPClientSocket.sendto(bytesToSend, brokerAddressPort)
             for i in myStreams:
@@ -66,6 +71,9 @@ def send(type):
         elif type[:10] == "disconnect":
             toSend = idByte + dcByte + blankStream + str.encode("Dc request")
             UDPClientSocket.sendto(toSend, brokerAddressPort)
+            myStreams.clear()
+        else:
+            print("Bad command. Please try again.")
 
         print("Waiting for acknowledgement from Broker...")
         for i in range(30):
@@ -84,9 +92,10 @@ def send(type):
 
 
 def decodeAudio(data):
-    audio_segment = AudioSegment.from_mp3(io.BytesIO(data))
+    #audio_segment = AudioSegment.from_mp3(io.BytesIO(data))
     # Save the MP3 file
-    audio_segment.export("output.mp3", format="mp3")
+    #audio_segment.export("output.mp3", format="mp3")
+    print("Audio received")
 
 def printID(header):
     id = header[2:4]
@@ -106,7 +115,8 @@ def listen(sentInfo):
             print(data.decode())
         for i in myStreams:
             if header[2:6] == i[0]:
-                if int.from_bytes(header[5:8],'big') >= i[1] or i[1] == -1 or header[5] == 0:
+                frameAsInt = int.from_bytes(header[6:8],'big')
+                if frameAsInt >= i[1] or i[1] == -1 or frameAsInt == 0:
                     if header[1] == 3:
                         print(data.decode())
                     if header[1] == 1:
@@ -117,7 +127,7 @@ def listen(sentInfo):
                         decodeImage(data)
                     elif header[1] == 4:
                         decodeAudio(data)
-                    i[1] = int.from_bytes(header[5:8],'big')
+                    i[1] = int.from_bytes(header[6:8],'big')
 
 
 

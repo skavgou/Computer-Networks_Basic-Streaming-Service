@@ -135,7 +135,6 @@ def encodeTextArray(textData):
 
 def sendText(text):
     if text[5] < len(text[4]):
-        #$print(text[4][text[5]])
         if isinstance(text[4][text[5]], str):
             #print("Sending " + text[4][text[5]])
             frameNo = text[5].to_bytes(2,'big')
@@ -168,7 +167,6 @@ def sendVideo(video):
     frameNo = video[4].to_bytes(2,'big')
     fileHeader = idByte + videoByte + streamerIDNum + video[1] + frameNo
     frameFound, frame = video[2].read()
-    frame = cv2.resize(frame, (1280, 720))
     ret, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY),30])
     encodedFrame = pickle.dumps(buffer)
     data = fileHeader + encodedFrame
@@ -185,9 +183,8 @@ def sendVideo(video):
         video[4] = 0
 
 def sendImage(image):
-    print("Sending Image")
     fileHeader = idByte + imageByte + streamerIDNum + image[1] + blank
-    ret, buffer = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
+    ret, buffer = cv2.imencode(".jpg", image[2], [int(cv2.IMWRITE_JPEG_QUALITY), 30])
     encodedFrame = pickle.dumps(buffer)
     data = fileHeader + encodedFrame
     UDPServerSocket.sendto(data, brokerAddressPort)
@@ -214,30 +211,44 @@ def send(type):
     type += filler #prevents out of bounds errors
     if type[0:4] == "send":
         if type[5:8] == "msg":
-            activeStreams.append(sampleTextData)
-            print(activeStreams)
+            if sampleTextData not in activeStreams:
+                activeStreams.append(sampleTextData)
+            else:
+                print("Stream already active")
         elif type[5:10] == "video":
             if type[11] == "1":
-                activeStreams.append(vid1Data)
+                if vid1Data not in activeStreams:
+                    activeStreams.append(vid1Data)
+                else:
+                    print("Stream already active")
             elif type[11] == "2":
-                activeStreams.append(vid2Data)
+                if vid2Data not in activeStreams:
+                    activeStreams.append(vid2Data)
+                else:
+                    print("Stream already active")
             else:
                 print("Please choose a valid video number")
                 print("The valid numbers are: 1,2")
         elif type[5:10] == "image":
-            activeStreams.append(image1Data)
+            if image1Data not in activeStreams:
+                activeStreams.append(image1Data)
+            else:
+                print("Stream already active")
         elif type[5:10] == "audio":
-            activeStreams.append(audio1Data)
+            if audio1Data not in activeStreams:
+                activeStreams.append(audio1Data)
+            else:
+                print("Stream already active")
         else:
             print("Please choose a valid option")
-            print("The valid options are: msg, video, image")
+            print("The valid options are: msg, video, image, audio")
     elif type[0:4] == "stop":
         fileHeader = idByte + removeByte + streamerIDNum
         if type[5:8] == "msg":
             if sampleTextData in activeStreams:
                 activeStreams.remove(sampleTextData)
                 fileHeader += sampleTextData[1] + blank
-                data = fileHeader + " "
+                data = fileHeader + str.encode("Stop request for text stream")
                 UDPServerSocket.sendto(data, brokerAddressPort)
             else:
                 print("Stream not currently active!")
@@ -246,7 +257,7 @@ def send(type):
                 if vid1Data in activeStreams:
                     activeStreams.remove(vid1Data)
                     fileHeader += vid1Data[1] + blank
-                    data = fileHeader + str.encode(" ")
+                    data = fileHeader + str.encode("Stop request for video")
                     UDPServerSocket.sendto(data, brokerAddressPort)
                 else:
                     print("Stream not currently active!")
@@ -254,18 +265,18 @@ def send(type):
                 if vid2Data in activeStreams:
                     activeStreams.remove(vid2Data)
                     fileHeader += vid2Data[1] + blank
-                    data = fileHeader + str.encode(" ")
+                    data = fileHeader + str.encode("Stop request for video")
                     UDPServerSocket.sendto(data, brokerAddressPort)
                 else:
                     print("Stream not currently active!")
             else:
                 print("Please choose a valid video number")
-                print("The valid numbers are: 1,2")
+                print("The valid numbers are: 1,2. Try typing 'stop video 1'")
         elif type[5:10] == "image":
             if image1Data in activeStreams:
                 activeStreams.remove(image1Data)
                 fileHeader += image1Data[1] + blank
-                data = fileHeader + str.encode(" ")
+                data = fileHeader + str.encode("Stop request for image")
                 UDPServerSocket.sendto(data, brokerAddressPort)
             else:
                 print("Stream not currently active!")
@@ -273,16 +284,16 @@ def send(type):
             if audio1Data in activeStreams:
                 activeStreams.remove(audio1Data)
                 fileHeader += audio1Data[1] + blank
-                data = fileHeader + str.encode(" ")
+                data = fileHeader + str.encode("Stop request for audio")
                 UDPServerSocket.sendto(data, brokerAddressPort)
             else:
                 print("Stream not currently active!")
         else:
             print("Please choose a valid option")
-            print("The valid options are: msg, video, image")
+            print("The valid options are: msg, video, image, audio")
     elif type[0:10] == "disconnect":
         fileHeader = idByte + dcByte + streamerIDNum + blankStream + blank
-        data = fileHeader + str.encode(" ")
+        data = fileHeader + str.encode("Server disconnect request")
         UDPServerSocket.sendto(data, brokerAddressPort)
         activeStreams.clear()
 
