@@ -23,6 +23,14 @@ textByte = (int("0001", 2))
 textByte = textByte.to_bytes(1, 'big')
 audioByte = (int("0100", 2))
 audioByte = audioByte.to_bytes(1, 'big')
+removeByte = (int("0101", 2))
+removeByte = removeByte.to_bytes(1, 'big')
+dcByte = (int("0110", 2))
+dcByte = dcByte.to_bytes(1, 'big')
+blank = (int("0000", 2))
+blank = blank.to_bytes(2, 'big')
+blankStream = (int("0000", 2))
+blankStream = blankStream.to_bytes(1, 'big')
 
 sampleVid = cv2.VideoCapture('Yoink.mp4')
 sample1Length = int(sampleVid.get(cv2.CAP_PROP_FRAME_COUNT))
@@ -87,7 +95,7 @@ sampleTextData.append(0)
 
 activeStreams = []
 currentTime = 0
-streamerIDNum = (int(random.randint(0,65536))).to_bytes(2, 'big')
+streamerIDNum = (int(random.randint(0,16777216))).to_bytes(3, 'big')
 
 
 
@@ -118,7 +126,7 @@ def encodeTextArray(textData):
     textData.append(textArray)
     textData.append(0)
     textData.append(0)
-    print(textData)
+    #print(textData)
 
 #def sendAudio(audio):
 
@@ -157,28 +165,13 @@ def sendAudio(audio):
         audio[4] = 0
 
 def sendVideo(video):
-    #clockTime = time.perf_counter() - currentTime
-    #print("Video send called, " + str(clockTime))
     frameNo = video[4].to_bytes(2,'big')
     fileHeader = idByte + videoByte + streamerIDNum + video[1] + frameNo
-    #clockTime = time.perf_counter() - currentTime
-    #print("Header created, " + str(clockTime))
     frameFound, frame = video[2].read()
-    #clockTime = time.perf_counter() - currentTime
-    #print("Frame read, " + str(clockTime))
     frame = cv2.resize(frame, (1280, 720))
-    #clockTime = time.perf_counter() - currentTime
-    #print("Resize, " + str(clockTime))
     ret, buffer = cv2.imencode(".jpg", frame, [int(cv2.IMWRITE_JPEG_QUALITY),30])
-    #clockTime = time.perf_counter() - currentTime
-    #print("imencode, " + str(clockTime))
     encodedFrame = pickle.dumps(buffer)
-    #clockTime = time.perf_counter() - currentTime
-    #print("Pickle encode, " + str(clockTime))
-    #encodedFrame = video[5][video[4]]
     data = fileHeader + encodedFrame
-    #clockTime = time.perf_counter() - currentTime
-    #print("Packet made, " + str(clockTime))
 
     UDPServerSocket.sendto(data, brokerAddressPort)
 
@@ -193,8 +186,6 @@ def sendVideo(video):
 
 def sendImage(image):
     print("Sending Image")
-    blank = (int("0000", 2))
-    blank = blank.to_bytes(1, 'big')
     fileHeader = idByte + imageByte + streamerIDNum + image[1] + blank
     ret, buffer = cv2.imencode(".jpg", image, [int(cv2.IMWRITE_JPEG_QUALITY), 50])
     encodedFrame = pickle.dumps(buffer)
@@ -238,23 +229,76 @@ def send(type):
         elif type[5:10] == "audio":
             activeStreams.append(audio1Data)
         else:
-            print("Please choose send a valid option")
+            print("Please choose a valid option")
             print("The valid options are: msg, video, image")
-
+    elif type[0:4] == "stop":
+        fileHeader = idByte + removeByte + streamerIDNum
+        if type[5:8] == "msg":
+            if sampleTextData in activeStreams:
+                activeStreams.remove(sampleTextData)
+                fileHeader += sampleTextData[1] + blank
+                data = fileHeader + " "
+                UDPServerSocket.sendto(data, brokerAddressPort)
+            else:
+                print("Stream not currently active!")
+        elif type[5:10] == "video":
+            if type[11] == "1":
+                if vid1Data in activeStreams:
+                    activeStreams.remove(vid1Data)
+                    fileHeader += vid1Data[1] + blank
+                    data = fileHeader + str.encode(" ")
+                    UDPServerSocket.sendto(data, brokerAddressPort)
+                else:
+                    print("Stream not currently active!")
+            elif type[11] == "2":
+                if vid2Data in activeStreams:
+                    activeStreams.remove(vid2Data)
+                    fileHeader += vid2Data[1] + blank
+                    data = fileHeader + str.encode(" ")
+                    UDPServerSocket.sendto(data, brokerAddressPort)
+                else:
+                    print("Stream not currently active!")
+            else:
+                print("Please choose a valid video number")
+                print("The valid numbers are: 1,2")
+        elif type[5:10] == "image":
+            if image1Data in activeStreams:
+                activeStreams.remove(image1Data)
+                fileHeader += image1Data[1] + blank
+                data = fileHeader + str.encode(" ")
+                UDPServerSocket.sendto(data, brokerAddressPort)
+            else:
+                print("Stream not currently active!")
+        elif type[5:10] == "audio":
+            if audio1Data in activeStreams:
+                activeStreams.remove(audio1Data)
+                fileHeader += audio1Data[1] + blank
+                data = fileHeader + str.encode(" ")
+                UDPServerSocket.sendto(data, brokerAddressPort)
+            else:
+                print("Stream not currently active!")
+        else:
+            print("Please choose a valid option")
+            print("The valid options are: msg, video, image")
+    elif type[0:10] == "disconnect":
+        fileHeader = idByte + dcByte + streamerIDNum + blankStream + blank
+        data = fileHeader + str.encode(" ")
+        UDPServerSocket.sendto(data, brokerAddressPort)
+        activeStreams.clear()
 
 
 
 
 def listen():
-    msgFromBroker = UDPServerSocket.recvfrom(bufferSize)
-    msg = "Message from Broker {}".format(msgFromBroker[0])
-    print(msg)
+    msgFromBroker, addr = UDPServerSocket.recvfrom(bufferSize)
+    if msgFromBroker[0] == 2 and msgFromBroker[1] == 15:
+        print("ack received")
 
 
 print("Server start!")
 
 localIP     = "server"
-bufferSize  = 52428800000
+bufferSize  = 52428800
 
 brokerAddressPort   = ("broker", 50002)
 msgFromServer       = "Hello Client!!"
@@ -283,12 +327,9 @@ while(run):
         send(user_input)
 
     # Check for incoming packets
-    #readable, _, _ = select.select(ServerSock, [], [], 0.1)
+    readable, _, _ = select.select(ServerSock, [], [], 0.1)
 
-    #for s in readable:
-        #if s is UDPServerSocket:
-            #data, addr = UDPServerSocket.recvfrom(1024)
-            #print(f"Received data from {addr}: {data.decode('utf-8')}")
-    currentTime = time.perf_counter()
-    #print("Sending data")
+    for s in readable:
+        if s is UDPServerSocket:
+            listen()
     sendOutData()

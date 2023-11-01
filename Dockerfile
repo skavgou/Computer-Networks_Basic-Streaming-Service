@@ -10,6 +10,7 @@ RUN pip3 install audio2numpy
 RUN pip3 install pydub
 RUN pip3 install sounddevice
 RUN pip3 install matplotlib
+RUN pip3 install pydub
 COPY /PythonFiles /PythonFiles
 WORKDIR /PythonFiles
 ENV DISPLAY=host.docker.internal:0
